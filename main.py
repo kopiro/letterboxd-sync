@@ -371,8 +371,9 @@ def main():
                     if already_rated:
                         try:
                             # Compare existing rating with new rating
-                            # Letterboxd CSV rating is a string, TMDB existing is a number
-                            current_rating_val = float(rating)
+                            # Letterboxd CSV rating is 0-5, TMDB existing is 1-10.
+                            # Multiply Letterboxd rating by 2 to get TMDB scale.
+                            current_rating_val = float(rating) * 2
                             
                             # Check difference (handling potential float imprecision)
                             if abs(current_rating_val - existing_rating) < 0.1:
@@ -385,7 +386,9 @@ def main():
                             pass
 
                     # Rate it
-                    if rate_item(api_key, session_id, tmdb_id, media_type, rating, title):
+                    # Multiply rating by 2 before sending to TMDB
+                    tmdb_rating = float(rating) * 2
+                    if rate_item(api_key, session_id, tmdb_id, media_type, tmdb_rating, title):
                         success_count += 1
                     else:
                         fail_count += 1
