@@ -1,0 +1,5 @@
+venv/
+ratings.csv
+tmdb_id_cache.json
+tmdb_session.json
+.env
