@@ -47,11 +47,14 @@ This script allows you to import your Letterboxd ratings into your TMDb (The Mov
    ```
 
 2. **Letterboxd Data:**
-   - **Automatic:** If you provide your Letterboxd credentials in `.env`, the script will automatically login and download your latest data.
+   - **Automatic:** If you provide your Letterboxd credentials in `.env`, the script will automatically login and download your latest data to the `data/` directory.
    - **Manual:** 
      - Export your data from Letterboxd (Settings > Import & Export > Export Data).
-     - Extract the zip file.
-     - Copy the `ratings.csv` file to the project directory.
+     - You can pass the downloaded ZIP file directly to the script:
+       ```bash
+       python main.py path/to/letterboxd-export.zip
+       ```
+     - Or extract `ratings.csv` and run normally.
 
 ## Usage
 
@@ -61,10 +64,12 @@ Run the script:
 python main.py
 ```
 
-Or specify a different CSV file path:
+Or specify a different input file (CSV or ZIP):
 
 ```bash
 python main.py path/to/your/ratings.csv
+# OR
+python main.py path/to/letterboxd-export.zip
 ```
 
 ### First Run
@@ -72,7 +77,7 @@ On the first run, the script will:
 1. Ask for your TMDb API Key (if not in `.env`).
 2. generate a Request Token.
 3. Ask you to visit a URL to approve the application.
-4. Generate and save a Session ID (`tmdb_session.json`).
+4. Generate and save a Session ID (`data/tmdb_session.json`).
 
 ### Subsequent Runs
 The script will reuse the saved session and ID cache.
@@ -81,9 +86,9 @@ The script will reuse the saved session and ID cache.
 
 - `main.py`: The main script.
 - `requirements.txt`: Python dependencies.
-- `tmdb_session.json`: Stores your TMDb session ID (generated after login).
-- `tmdb_id_cache.json`: Cache file mapping Letterboxd URLs to TMDb IDs (generated during run).
-- `ratings.csv`: Your Letterboxd export file (input).
+- `data/tmdb_session.json`: Stores your TMDb session ID (generated after login).
+- `data/tmdb_id_cache.json`: Cache file mapping Letterboxd URLs to TMDb IDs (generated during run).
+- `ratings.csv` or `letterboxd-export.zip`: Your Letterboxd export data (input).
 
 ## Note
 Letterboxd ratings are on a scale of 0.5-5, while TMDb uses 1-10. The script sends the rating value directly from the CSV (which is usually 0.5-5 in the export). TMDb API accepts values from 0.5 to 10.0.
