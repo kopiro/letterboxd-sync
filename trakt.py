@@ -113,6 +113,65 @@ def get_headers(client_id, access_token):
         "trakt-api-key": client_id
     }
 
+def get_existing_ratings(client_id, access_token, media_type="movies"):
+    """
+    Fetches all existing ratings for a user from Trakt.
+    media_type: 'movies' or 'shows'
+    Returns dict: {tmdb_id: rating_value}
+    """
+    print(f"Fetching existing {media_type} ratings from Trakt...")
+    ratings = {}
+    page = 1
+    limit = 100
+    headers = get_headers(client_id, access_token)
+    
+    while True:
+        url = f"{TRAKT_API_URL}/users/me/ratings/{media_type}"
+        params = {"page": page, "limit": limit}
+        
+        try:
+            r = requests.get(url, headers=headers, params=params)
+            if r.status_code != 200:
+                print(f"Warning: Failed to fetch existing ratings page {page}: {r.status_code}")
+                break
+                
+            data = r.json()
+            if not data:
+                break
+                
+            for item in data:
+                # item structure: {'rating': 10, 'type': 'movie', 'movie': {'ids': {'tmdb': 123, ...}}}
+                rating_val = item.get("rating")
+                # 'movies' -> 'movie', 'shows' -> 'show'
+                single_type = media_type[:-1] 
+                media_data = item.get(single_type)
+                
+                if media_data:
+                     ids = media_data.get("ids", {})
+                     tmdb_id = ids.get("tmdb")
+                     if tmdb_id:
+                         ratings[str(tmdb_id)] = rating_val
+            
+            # Check pagination headers
+            try:
+                page_count = int(r.headers.get("X-Pagination-Page-Count", 1))
+            except:
+                page_count = 1
+                
+            print(f"  Fetched page {page}/{page_count} ({len(ratings)} total found)")
+            
+            if page >= page_count:
+                break
+                
+            page += 1
+            time.sleep(0.2)
+            
+        except Exception as e:
+            print(f"Error fetching ratings: {e}")
+            break
+            
+    return ratings
+
 def sync_ratings_batch(client_id, access_token, batch):
     """
     Sends a batch of ratings to Trakt.
@@ -185,6 +244,11 @@ def sync_trakt(csv_file_path=None):
         
     access_token = auth_data["access_token"]
     
+    # Fetch existing ratings
+    print("\nChecking existing ratings on Trakt...")
+    existing_movie_ratings = get_existing_ratings(client_id, access_token, "movies")
+    existing_show_ratings = get_existing_ratings(client_id, access_token, "shows")
+    
     # Cache
     cache = common.load_cache()
     initial_cache_size = len(cache)
@@ -221,6 +285,20 @@ def sync_trakt(csv_file_path=None):
             if tmdb_id and media_type:
                 tmdb_id = str(tmdb_id)
                 tmdb_rating = int(float(rating) * 2) # Trakt uses integer 1-10
+                
+                # Check existing
+                existing_rating = None
+                if media_type == "movie":
+                    existing_rating = existing_movie_ratings.get(tmdb_id)
+                else:
+                    existing_rating = existing_show_ratings.get(tmdb_id)
+                
+                if existing_rating is not None:
+                    if existing_rating == tmdb_rating:
+                        print(f"- Skipping '{title}': Already rated {existing_rating}")
+                        continue
+                    else:
+                        print(f"  Updating '{title}': {existing_rating} -> {tmdb_rating}")
                 
                 print(f"  Queueing '{title}': {tmdb_rating}")
                 
