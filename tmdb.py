@@ -45,7 +45,7 @@ def authenticate(api_key):
     response = requests.get(f"{tmdb_api_url}/authentication/token/new", params={"api_key": api_key})
     if response.status_code != 200:
         print(f"Error creating request token: {response.text}")
-        sys.exit(1)
+        return None
     
     request_token = response.json().get("request_token")
     
@@ -60,7 +60,7 @@ def authenticate(api_key):
     
     if response.status_code != 200:
         print(f"Error creating session ID: {response.text}")
-        sys.exit(1)
+        return None
         
     session_id = response.json().get("session_id")
     print(f"\nAuthentication successful! Your Session ID is: {session_id}")
@@ -167,17 +167,17 @@ def rate_item(api_key, session_id, tmdb_id, media_type, rating, title):
         return False
 
 
-def main():
+def sync_tmdb(csv_file_path=None):
     print("--- TMDB Ratings Importer (Letterboxd Edition) ---")
     
-    csv_file_path = "ratings.csv"
-    
-    # Check for CLI arg first
-    if len(sys.argv) > 1:
-        csv_file_path = sys.argv[1]
-    
-    # Setup data file (download or check existence)
-    csv_file_path = common.setup_letterboxd_export(csv_file_path)
+    if not csv_file_path:
+        csv_file_path = "ratings.csv"
+        # Check for CLI arg first if running as main
+        if len(sys.argv) > 1:
+            csv_file_path = sys.argv[1]
+        
+        # Setup data file (download or check existence)
+        csv_file_path = common.setup_letterboxd_export(csv_file_path)
 
     # Get API Key
     api_key = common.get_env_variable("TMDB_API_KEY")
@@ -185,16 +185,19 @@ def main():
         api_key = input("Enter your TMDB API Key: ").strip()
         if not api_key:
             print("API Key is required.")
-            sys.exit(1)
+            return False
 
     # Authenticate (manages session ID persistence)
     session_id = authenticate(api_key)
+    if not session_id:
+        print("Authentication failed.")
+        return False
     
     # Get Account ID
     account_id = get_account_id(api_key, session_id)
     if not account_id:
         print("Error: Could not retrieve TMDB Account ID.")
-        sys.exit(1)
+        return False
         
     # Fetch existing ratings
     print("\nChecking existing ratings on TMDB...")
@@ -224,7 +227,7 @@ def main():
                 # But here we iterate rows, so maybe check first row structure?
                 # For simplicity we just skip invalid rows if any.
                 # Wait, parse_csv_row returns None if uri or rating missing.
-                print(f"Skipping row {i+1}: Missing URI or Rating")
+                # print(f"Skipping row {i+1}: Missing URI or Rating")
                 continue
 
             title = parsed['title']
@@ -287,10 +290,12 @@ def main():
                 
     except KeyboardInterrupt:
         print("\nProcess interrupted by user.")
+        return False
     except Exception as e:
         print(f"\nAn unexpected error occurred: {e}")
         import traceback
         traceback.print_exc()
+        return False
     finally:
         if len(cache) > initial_cache_size:
             print("\nSaving updated cache...")
@@ -300,6 +305,7 @@ def main():
     print(f"Total processed: {success_count + fail_count}")
     print(f"Successful: {success_count}")
     print(f"Failed: {fail_count}")
+    return True
 
 if __name__ == "__main__":
-    main()
+    sync_tmdb()

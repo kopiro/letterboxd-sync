@@ -49,7 +49,7 @@ def authenticate(client_id, client_secret):
         response = requests.post(url, json=data, headers=headers)
         if response.status_code != 200:
             print(f"Error getting device code: {response.text}")
-            sys.exit(1)
+            return None
             
         code_data = response.json()
         device_code = code_data["device_code"]
@@ -87,23 +87,23 @@ def authenticate(client_id, client_secret):
                 continue
             elif r.status_code == 404:
                 print("\nInvalid device code.")
-                sys.exit(1)
+                return None
             elif r.status_code == 409:
                 print("\nAlready used.")
-                sys.exit(1)
+                return None
             elif r.status_code == 410:
                 print("\nExpired.")
-                sys.exit(1)
+                return None
             elif r.status_code == 418:
                 print("\nDenied.")
-                sys.exit(1)
+                return None
             else:
                 print(f"\nError: {r.status_code} {r.text}")
-                sys.exit(1)
+                return None
                 
     except Exception as e:
         print(f"\nError during authentication: {e}")
-        sys.exit(1)
+        return None
 
 def get_headers(client_id, access_token):
     return {
@@ -113,7 +113,7 @@ def get_headers(client_id, access_token):
         "trakt-api-key": client_id
     }
 
-def sync_ratings(client_id, access_token, batch):
+def sync_ratings_batch(client_id, access_token, batch):
     """
     Sends a batch of ratings to Trakt.
     batch is a dict with 'movies' and 'shows' lists.
@@ -138,7 +138,7 @@ def sync_ratings(client_id, access_token, batch):
         print(f"✗ Error syncing ratings batch: {e}")
         return False
 
-def sync_history(client_id, access_token, batch):
+def sync_history_batch(client_id, access_token, batch):
     """
     Sends a batch of history (watched status) to Trakt.
     batch is a dict with 'movies' and 'shows' lists.
@@ -160,15 +160,15 @@ def sync_history(client_id, access_token, batch):
         print(f"✗ Error syncing history batch: {e}")
         return False
 
-def main():
+def sync_trakt(csv_file_path=None):
     print("--- Trakt Ratings Importer (Letterboxd Edition) ---")
     
-    csv_file_path = "ratings.csv"
-    if len(sys.argv) > 1:
-        csv_file_path = sys.argv[1]
-        
-    # Setup data
-    csv_file_path = common.setup_letterboxd_export(csv_file_path)
+    if not csv_file_path:
+        csv_file_path = "ratings.csv"
+        if len(sys.argv) > 1:
+            csv_file_path = sys.argv[1]
+        # Setup data
+        csv_file_path = common.setup_letterboxd_export(csv_file_path)
     
     # Env vars
     client_id = common.get_env_variable("TRAKT_CLIENT_ID")
@@ -176,10 +176,13 @@ def main():
     
     if not client_id or not client_secret:
         print("Error: TRAKT_CLIENT_ID and TRAKT_CLIENT_SECRET are required in .env")
-        sys.exit(1)
+        return False
         
     # Auth
     auth_data = authenticate(client_id, client_secret)
+    if not auth_data:
+        return False
+        
     access_token = auth_data["access_token"]
     
     # Cache
@@ -256,16 +259,16 @@ def main():
                 
                 # Flush if full
                 if len(batch_movies_rating) >= BATCH_SIZE:
-                    sync_ratings(client_id, access_token, {"movies": batch_movies_rating})
-                    sync_history(client_id, access_token, {"movies": batch_movies_history})
+                    sync_ratings_batch(client_id, access_token, {"movies": batch_movies_rating})
+                    sync_history_batch(client_id, access_token, {"movies": batch_movies_history})
                     count_processed += len(batch_movies_rating)
                     batch_movies_rating = []
                     batch_movies_history = []
                     time.sleep(1)
                     
                 if len(batch_shows_rating) >= BATCH_SIZE:
-                    sync_ratings(client_id, access_token, {"shows": batch_shows_rating})
-                    sync_history(client_id, access_token, {"shows": batch_shows_history})
+                    sync_ratings_batch(client_id, access_token, {"shows": batch_shows_rating})
+                    sync_history_batch(client_id, access_token, {"shows": batch_shows_history})
                     count_processed += len(batch_shows_rating)
                     batch_shows_rating = []
                     batch_shows_history = []
@@ -277,27 +280,30 @@ def main():
                 
     except KeyboardInterrupt:
         print("\nInterrupted.")
+        return False
     except Exception as e:
         print(f"\nError: {e}")
         import traceback
         traceback.print_exc()
+        return False
     finally:
         # Flush remaining
         if batch_movies_rating:
             print(f"Syncing remaining {len(batch_movies_rating)} movies...")
-            sync_ratings(client_id, access_token, {"movies": batch_movies_rating})
-            sync_history(client_id, access_token, {"movies": batch_movies_history})
+            sync_ratings_batch(client_id, access_token, {"movies": batch_movies_rating})
+            sync_history_batch(client_id, access_token, {"movies": batch_movies_history})
 
         if batch_shows_rating:
             print(f"Syncing remaining {len(batch_shows_rating)} shows...")
-            sync_ratings(client_id, access_token, {"shows": batch_shows_rating})
-            sync_history(client_id, access_token, {"shows": batch_shows_history})
+            sync_ratings_batch(client_id, access_token, {"shows": batch_shows_rating})
+            sync_history_batch(client_id, access_token, {"shows": batch_shows_history})
             
         if len(cache) > initial_cache_size:
             print("Saving cache...")
             common.save_cache(cache)
 
     print("\nDone.")
+    return True
 
 if __name__ == "__main__":
-    main()
+    sync_trakt()

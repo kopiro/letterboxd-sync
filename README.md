@@ -1,30 +1,45 @@
-# Letterboxd to TMDb Ratings Importer
+# Letterboxd Sync: TMDB & Trakt
 
-This script allows you to import your Letterboxd ratings into your TMDb (The Movie Database) account. It parses your Letterboxd export file, resolves the movies and TV shows to their TMDb IDs, and applies your ratings to your TMDb account.
+A powerful toolset to sync your **Letterboxd** ratings and watched history to **The Movie Database (TMDB)** and **Trakt**.
 
 ## Features
 
-- **Movies & TV Support:** Handles both movies and TV shows.
-- **Smart Caching:** Caches TMDb IDs to avoid repeated scraping of Letterboxd pages.
-- **Duplicate Prevention:** Checks your existing TMDb ratings to avoid re-rating items you've already rated.
-- **Session Management:** Saves your TMDb session so you only need to authenticate once.
+### Core Capabilities
+- **Letterboxd Data Download**: Automatically logs in and downloads your latest export data.
+- **TMDB ID Resolution**: Scrapes Letterboxd pages to find the corresponding TMDB IDs for movies and TV shows.
+- **Caching System**: Caches resolved IDs locally (`data/tmdb_id_cache.json`) to speed up future runs and minimize scraping.
+- **Parallel Processing**: Uses multi-threading to resolve TMDB IDs quickly.
+
+### Platform Support
+
+#### 1. The Movie Database (TMDB)
+- **Ratings Sync**: Imports your ratings to your TMDB account.
+- **Smart Updates**: Checks your existing TMDB ratings first to avoid duplicates or unnecessary API calls.
+- **Scale Conversion**: Automatically converts Letterboxd's 5-star scale to TMDB's 10-point scale.
+- **Session Management**: Persists your session so you only authenticate once.
+
+#### 2. Trakt.tv
+- **Ratings & History**: Syncs both your ratings and your watched history.
+- **Backdating**: Preserves the "Watched Date" from your Letterboxd diary entries.
+- **Batch Syncing**: Uploads data in batches for efficiency.
+- **Device Flow Auth**: Secure OAuth device flow authentication.
 
 ## Prerequisites
 
-- Python 3.6 or higher
-- A [TMDb Account](https://www.themoviedb.org/)
-- A [TMDb API Key](https://www.themoviedb.org/settings/api) (free to generate)
-- Your Letterboxd export data (`ratings.csv`)
+- **Python 3.9+**
+- **Letterboxd Account**
+- **TMDB Account** + API Key (free at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api))
+- **Trakt Account** + API App (free at [trakt.tv/oauth/applications](https://trakt.tv/oauth/applications))
 
 ## Installation
 
-1. **Clone the repository** (or download the files):
+1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
-   cd letterboxd-to-tmdb
+   git clone https://github.com/flaviod/letterboxd-sync.git
+   cd letterboxd-sync
    ```
 
-2. **Set up a virtual environment** (recommended):
+2. **Create a virtual environment:**
    ```bash
    python3 -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
@@ -37,59 +52,68 @@ This script allows you to import your Letterboxd ratings into your TMDb (The Mov
 
 ## Configuration
 
-1. **Credentials:**
-   Create a `.env` file in the project root with the following:
-   ```
-   TMDB_API_KEY=your_api_key_here
-   # Optional: For automatic Letterboxd export download
-   LETTERBOXD_USERNAME=your_username
-   LETTERBOXD_PASSWORD=your_password
-   ```
+Create a `.env` file in the project root with your credentials:
 
-2. **Letterboxd Data:**
-   - **Automatic:** If you provide your Letterboxd credentials in `.env`, the script will automatically login and download your latest data to the `data/` directory.
-   - **Manual:** 
-     - Export your data from Letterboxd (Settings > Import & Export > Export Data).
-     - You can pass the downloaded ZIP file directly to the script:
-       ```bash
-       python main.py path/to/letterboxd-export.zip
-       ```
-     - Or extract `ratings.csv` and run normally.
+```env
+# Letterboxd (Required for auto-download)
+LETTERBOXD_USERNAME=your_username
+LETTERBOXD_PASSWORD=your_password
+
+# TMDB (Required for TMDB sync)
+TMDB_API_KEY=your_tmdb_api_key
+
+# Trakt (Required for Trakt sync)
+TRAKT_CLIENT_ID=your_trakt_client_id
+TRAKT_CLIENT_SECRET=your_trakt_client_secret
+
+# Sync Configuration (for main.py)
+SYNC_SERVICES=tmdb,trakt
+```
 
 ## Usage
 
-Run the script:
+### Option 1: All-in-One Sync (Recommended)
+
+Configure `SYNC_SERVICES` in your `.env` file (e.g., `tmdb,trakt`) and run:
 
 ```bash
 python main.py
 ```
 
-Or specify a different input file (CSV or ZIP):
+This will:
+1. Download your latest Letterboxd data.
+2. Resolve/Cache TMDB IDs.
+3. Sync to all configured services sequentially.
 
+### Option 2: Manual / Individual Steps
+
+**1. Prepare Data:**
 ```bash
-python main.py path/to/your/ratings.csv
-# OR
-python main.py path/to/letterboxd-export.zip
+python letterbox_downloader.py
+```
+*Downloads export zip to `data/` and populates `data/tmdb_id_cache.json`.*
+
+**2. Sync with TMDB:**
+```bash
+python tmdb.py
 ```
 
-### First Run
-On the first run, the script will:
-1. Ask for your TMDb API Key (if not in `.env`).
-2. generate a Request Token.
-3. Ask you to visit a URL to approve the application.
-4. Generate and save a Session ID (`data/tmdb_session.json`).
+**3. Sync with Trakt:**
+```bash
+python trakt.py
+```
 
-### Subsequent Runs
-The script will reuse the saved session and ID cache.
+## File Structure
 
-## Files
+- `main.py`: Main entry point that orchestrates the full sync process based on config.
+- `letterbox_downloader.py`: Handles downloading export data and scraping/caching TMDB IDs.
+- `tmdb.py`: Syncs data to TMDB.
+- `trakt.py`: Syncs data to Trakt.
+- `common.py`: Shared utilities and configuration.
+- `data/`: Stores downloaded zips, cache files, and session tokens.
 
-- `main.py`: The main script.
-- `requirements.txt`: Python dependencies.
-- `data/tmdb_session.json`: Stores your TMDb session ID (generated after login).
-- `data/tmdb_id_cache.json`: Cache file mapping Letterboxd URLs to TMDb IDs (generated during run).
-- `ratings.csv` or `letterboxd-export.zip`: Your Letterboxd export data (input).
+## Notes
 
-## Note
-Letterboxd ratings are on a scale of 0.5-5, while TMDb uses 1-10. The script sends the rating value directly from the CSV (which is usually 0.5-5 in the export). TMDb API accepts values from 0.5 to 10.0.
-
+- **Rate Limits**: The scripts include delays to respect API rate limits.
+- **TV Shows**: Letterboxd recently added TV shows. This tool supports them by detecting the media type (movie/tv) during the scraping phase.
+- **Manual Data**: If you prefer not to use your Letterboxd password, you can manually download your export zip, place it in the `data/` folder as `letterboxd-export.zip`, and run the scripts.
